@@ -1,4 +1,11 @@
 {
+  "offline": {
+    "offline-mode": "You are offline. Showing cached content.",
+    "pending-sync": "Pending sync",
+    "syncing": "Syncing {{count}} memo(s)...",
+    "sync-failed": "Sync failed",
+    "retry": "Retry"
+  },
   "about": {
     "blogs": "Blogs",
     "description": "A privacy-first, lightweight note-taking service. Easily capture and share your great thoughts.",

@@ -2,6 +2,7 @@ import { create } from "@bufbuild/protobuf";
 import { FieldMaskSchema, timestampDate, timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { isEqual } from "lodash-es";
 import { memoServiceClient } from "@/connect";
+import { enqueueOfflineMemo } from "@/lib/offline-db";
 import type { Attachment } from "@/types/proto/api/v1/attachment_service_pb";
 import { AttachmentSchema } from "@/types/proto/api/v1/attachment_service_pb";
 import type { Memo } from "@/types/proto/api/v1/memo_service_pb";
@@ -81,6 +82,34 @@ export const memoService = {
       parentMemoName?: string;
     },
   ): Promise<{ memoName: string; hasChanges: boolean }> {
+    // Offline intercept: only for new memo creation (not edits or comments)
+    if (!navigator.onLine && !options.memoName && !options.parentMemoName) {
+      const localId = crypto.randomUUID();
+      const now = state.timestamps.createTime ?? new Date();
+
+      // Collect queued attachments from local files
+      const queuedAttachments = await Promise.all(
+        state.localFiles.map(async (lf) => ({
+          filename: lf.file.name,
+          type: lf.file.type,
+          bytes: new Uint8Array(await lf.file.arrayBuffer()),
+          previewUrl: lf.previewUrl,
+        })),
+      );
+
+      await enqueueOfflineMemo({
+        localId,
+        content: state.content,
+        visibility: state.metadata.visibility,
+        createTime: now,
+        attachments: queuedAttachments,
+        status: "pending",
+      });
+
+      // Return a synthetic name so the editor treats this as a successful save
+      return { memoName: `offline/${localId}`, hasChanges: true };
+    }
+
     // 1. Upload local files first
     const newAttachments = await uploadService.uploadFiles(state.localFiles);
     const allAttachments = [...state.metadata.attachments, ...newAttachments];

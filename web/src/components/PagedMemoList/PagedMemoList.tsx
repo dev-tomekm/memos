@@ -3,11 +3,13 @@ import { ArrowUpIcon } from "lucide-react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MentionResolutionProvider } from "@/components/MemoContent/MentionResolutionContext";
 import { deriveDefaultCreateTimeFromFilters } from "@/components/MemoEditor/utils/deriveDefaultCreateTime";
+import PendingMemoItem from "@/components/PendingMemoItem";
 import { Button } from "@/components/ui/button";
 import { userServiceClient } from "@/connect";
 import { useMemoFilterContext } from "@/contexts/MemoFilterContext";
 import { DEFAULT_LIST_MEMOS_PAGE_SIZE } from "@/helpers/consts";
 import { useInfiniteMemos } from "@/hooks/useMemoQueries";
+import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 import { userKeys } from "@/hooks/useUserQueries";
 import { State } from "@/types/proto/api/v1/common_pb";
 import type { Memo } from "@/types/proto/api/v1/memo_service_pb";
@@ -85,6 +87,7 @@ const PagedMemoList = (props: Props) => {
   const t = useTranslate();
   const queryClient = useQueryClient();
   const { filters } = useMemoFilterContext();
+  const { items: offlineItems, retry: retryOfflineItem } = useOfflineQueue();
 
   const showMemoEditor = props.showMemoEditor ?? false;
   const defaultCreateTime = useMemo(() => deriveDefaultCreateTimeFromFilters(filters), [filters]);
@@ -165,6 +168,12 @@ const PagedMemoList = (props: Props) => {
               />
             ) : null}
             <MemoFilters />
+            {/* Pending offline memos — shown at the top, sorted by createTime desc */}
+            {showMemoEditor &&
+              offlineItems
+                .slice()
+                .sort((a, b) => b.createTime.getTime() - a.createTime.getTime())
+                .map((item) => <PendingMemoItem key={item.localId} item={item} onRetry={retryOfflineItem} />)}
             {sortedMemoList.map((memo) => props.renderer(memo))}
 
             {/* Loading indicator for pagination */}

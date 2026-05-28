@@ -4,6 +4,7 @@ import type { InfiniteData } from "@tanstack/react-query";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { memoServiceClient } from "@/connect";
 import { userKeys } from "@/hooks/useUserQueries";
+import { getOfflineMemoList } from "@/lib/memo-cache";
 import type { ListMemosRequest, ListMemosResponse, Memo } from "@/types/proto/api/v1/memo_service_pb";
 import { ListMemoCommentsRequestSchema, ListMemosRequestSchema, MemoSchema } from "@/types/proto/api/v1/memo_service_pb";
 
@@ -122,6 +123,14 @@ export function useInfiniteMemos(request: Partial<ListMemosRequest> = {}, option
   return useInfiniteQuery({
     queryKey: memoKeys.list(request),
     queryFn: async ({ pageParam }) => {
+      // Offline fallback: serve cached memos from IndexedDB
+      if (!navigator.onLine) {
+        const cached = await getOfflineMemoList();
+        return {
+          memos: cached,
+          nextPageToken: "",
+        } as ListMemosResponse;
+      }
       const response = await memoServiceClient.listMemos(
         create(ListMemosRequestSchema, {
           ...request,
@@ -135,6 +144,8 @@ export function useInfiniteMemos(request: Partial<ListMemosRequest> = {}, option
     staleTime: 1000 * 60,
     gcTime: 1000 * 60 * 5,
     enabled: options?.enabled ?? true,
+    // Allow the query to run and serve cached data when offline
+    networkMode: "always",
   });
 }
 
